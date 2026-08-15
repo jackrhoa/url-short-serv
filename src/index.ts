@@ -11,10 +11,25 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+import { buildCanonical } from "../shared/canonical";
+
 type AddLinkBody = {
 	url: string;
 	slug?: string;
 }
+
+function unauthorized(): Response {
+	return new Response("Unauthorized", {
+		status: 401,
+		headers: { "WWW-Authenticate": "Signature" },
+	});
+}
+
+export function base64urlToBytes(s: string): Uint8Array {
+	const b64 = s.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(s.length / 4) * 4, "=");
+	return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
@@ -32,16 +47,30 @@ export default {
 					return new Response(null, { status: 302, headers: { Location: kvalue } });
 			}
 			case "POST": {
+				const timestampHeader = request.headers.get("x-timestamp");
+				const sigHeader = request.headers.get("x-signature");
+				if (!timestampHeader || !sigHeader) return unauthorized();
+
+				const now = Math.floor(Date.now() / 1000);
+				const timestamp = Number(timestampHeader);
+				if (!Number.isFinite(timestamp) || Math.abs(now - timestamp) > 5) return unauthorized();
+
+				const bodyText = await request.text();
+
+				const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bodyText));
+				const bodyHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+				const canonical = buildCanonical(timestampHeader, request.method, new URL(request.url).pathname, bodyHash);
+
+				const sigBytes = base64urlToBytes(sigHeader);
+				const keyBytes = base64urlToBytes(env.PUBLIC_KEY);
+
+				const key = await crypto.subtle.importKey("raw", keyBytes, { name: "Ed25519" }, false, ["verify"]);
+				const ok = await crypto.subtle.verify("Ed25519", key, sigBytes, new TextEncoder().encode(canonical));
+				if (!ok) return unauthorized();
+
 				let body: AddLinkBody;
-				const pin = request.headers.get("authorization");
-				if (!env.ADMIN_PIN || pin !== env.ADMIN_PIN) {
-					return new Response("Unauthorized", {
-					 	status: 401,
-						headers: {"WWW-Authenticate": "Bearer"},
-					})
-				}
 				try {
-					body = await request.json<AddLinkBody>();
+					body = JSON.parse(bodyText) as AddLinkBody;
 				} catch {
 					return new Response("Invalid request");
 				}
@@ -49,6 +78,9 @@ export default {
 					await env.LINKS.put(body.slug, body.url);
 					return new Response("Successfully added url!");
 				}
+			}
+			default: {
+				return new Response("Invalid request method");
 			}
 		}
 	}
