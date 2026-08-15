@@ -33,6 +33,13 @@ export default {
 			}
 			case "POST": {
 				let body: AddLinkBody;
+				const pin = request.headers.get("authorization");
+				if (!env.ADMIN_PIN || pin !== env.ADMIN_PIN) {
+					return new Response("Unauthorized", {
+					 	status: 401,
+						headers: {"WWW-Authenticate": "Bearer"},
+					})
+				}
 				try {
 					body = await request.json<AddLinkBody>();
 				} catch {
