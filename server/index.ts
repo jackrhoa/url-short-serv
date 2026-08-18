@@ -13,6 +13,7 @@
 
 import { buildCanonical } from "../shared/canonical";
 import { base64urlToBytes } from "../shared/base64url";
+import { sha256Hex } from "../shared/hash";
 
 type AddLinkBody = {
 	url: string;
@@ -55,8 +56,7 @@ export default {
 
 				const bodyText = await request.text();
 
-				const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bodyText));
-				const bodyHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+				const bodyHash = await sha256Hex(bodyText);
 				const canonical = buildCanonical(timestampHeader, request.method, new URL(request.url).pathname, bodyHash);
 
 				const sigBytes = base64urlToBytes(sigHeader);
