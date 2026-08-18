@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCanonical } from "../shared/canonical.ts";
+import { buildCanonical } from "../../shared/canonical.ts";
 
 describe("buildCanonical", () => {
 	it("joins fields with newlines", () => {
