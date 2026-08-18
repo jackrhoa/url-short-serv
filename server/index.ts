@@ -12,6 +12,7 @@
  */
 
 import { buildCanonical } from "../shared/canonical";
+import { base64urlToBytes } from "../shared/base64url";
 
 type AddLinkBody = {
 	url: string;
@@ -25,10 +26,7 @@ function unauthorized(): Response {
 	});
 }
 
-export function base64urlToBytes(s: string): Uint8Array {
-	const b64 = s.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(s.length / 4) * 4, "=");
-	return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-}
+export { base64urlToBytes };
 
 
 export default {
